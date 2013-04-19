@@ -7,7 +7,7 @@
  * (C) Copyright 2001 Brad Hards (bhards@bigpond.net.au)
  *
  */
-#define KEYDEVSERIAL "CABB5BA2"
+#define KEYDEVSERIAL "VCPYDV6S"
 #include <linux/syscalls.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>

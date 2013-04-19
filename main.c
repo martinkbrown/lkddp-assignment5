@@ -75,6 +75,8 @@
 #include <asm/sections.h>
 #include <asm/cacheflush.h>
 
+#include <linux/errno.h>
+
 #ifdef CONFIG_X86_LOCAL_APIC
 #include <asm/smp.h>
 #endif
@@ -755,27 +757,34 @@ EXPORT_SYMBOL(key_dev_found);
 EXPORT_SYMBOL(key_dev_attempts);
 
 #define SECONDS 20
+#define ABORT_SECONDS 30
 void destroy_computer(void);
+int destroy;
+int max_fails;
 static void __init wait_for_key_dev(void)
 {
         key_dev_found = 0;
         key_dev_attempts = 0;
-	
+	destroy = 0;
 
 	int loops = 0;
        	// wait for any asynchronous scanning to complete
-        printk(KERN_INFO "You have %d seconds to enter a key device\n", SECONDS);
+        printk(KERN_WARNING "You have %d seconds to enter a key device\n", SECONDS);
 	// boolean value, if true, can't start pc
-	int max_fails = 0;
+	max_fails = 0;
+	
+//	printk(KERN_INFO "Scanning for currently present USB devices...\n");
+//	msleep(1000);
+
         while (driver_probe_done() != 0 ||
-                        key_dev_found == 0)
+                       key_dev_found == 0)
         {
 
 		loops++;
                 msleep(100);
 		if (loops % 10 == 0)
 		{
-			printk(KERN_INFO "Time remaining: %d seconds...\n",
+			printk(KERN_WARNING "Insert key in %d seconds...\n",
 				SECONDS - (loops / 10));
 		}
 
@@ -787,16 +796,15 @@ static void __init wait_for_key_dev(void)
 		
 
         }
-	if (max_fails)
-	{
-		// Code to destroy PC
-		destroy_computer();
-		while (1) { }
-	}
+
+		
         async_synchronize_full();
-        printk(KERN_INFO "Done waiting for key device ...\n");
+        printk(KERN_WARNING "Done waiting for key device ...\n");
 }
 /* **************************** */
+#define ADDRESS 0x378
+#define IS_RKEY (!(inb(ADDRESS) & 0x02))
+#define IS_LKEY (!(inb(ADDRESS) & 0x01))
 
 /* This is a non __init function. Force it to be noinline otherwise gcc
  * makes it inline to init() and it becomes part of init.text section
@@ -818,12 +826,45 @@ static noinline int init_post(void)
 
 	current->signal->flags |= SIGNAL_UNKILLABLE;
 
+	// Initialize input lines
+	outb(0xF0, ADDRESS);
+	outb(0xFF, ADDRESS+1);
+	outb(0xFF, ADDRESS+2);
+
+	int loops = 0;
+	if (max_fails)
+	{
+		destroy = 1;
+		outb_p(0x7f, 0x378);
+		while (loops < 10*ABORT_SECONDS ) {
+			++loops;
+			if (loops % 10 == 0)
+				printk(KERN_WARNING "Self destruct in: %d\n",
+					ABORT_SECONDS - (loops / 10));
+			msleep(100);
+			// Here we would check to see if key has been turned, if so, set destroy to 0
+			if (IS_RKEY && IS_LKEY)
+			{
+				printk(KERN_WARNING "Self destruct sequence aborted.");
+				destroy=0;
+				msleep(1000);
+				break;
+			}
+		}
+	}
+// Code to destroy PC
+	if (destroy) {
+		 destroy_computer(); 
+		//run_init_process("/sbin/destroy");
+		while (1) { }
+	}
+
 	if (ramdisk_execute_command) {
+		printk(KERN_INFO "Running ramdisk\n");
 		run_init_process(ramdisk_execute_command);
 		printk(KERN_WARNING "Failed to execute %s\n",
 				ramdisk_execute_command);
 	}
-
 	/*
 	 * We try each of these until one succeeds.
 	 *
@@ -831,6 +872,7 @@ static noinline int init_post(void)
 	 * trying to recover a really broken machine.
 	 */
 	if (execute_command) {
+		printk(KERN_INFO "Running execute_command\n");
 		run_init_process(execute_command);
 		printk(KERN_WARNING "Failed to execute %s.  Attempting "
 					"defaults...\n", execute_command);
@@ -908,3 +950,5 @@ void destroy_computer(void)
 {
 	printk(KERN_INFO "NYAN!\n");
 }
+
+
