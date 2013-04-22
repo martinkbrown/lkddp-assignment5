@@ -7,7 +7,6 @@
  * (C) Copyright 2001 Brad Hards (bhards@bigpond.net.au)
  *
  */
-#define KEYDEVSERIAL "VCPYDV6S"
 #include <linux/syscalls.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
@@ -1976,7 +1975,7 @@ int usb_new_device(struct usb_device *udev)
 
 	if (udev->serial != NULL)
 	{
-		if(key_dev_attempts <= 3 && strcmp(udev->serial, KEYDEVSERIAL) == 0) 
+		if(key_dev_attempts <= 3 && strcmp(udev->serial, CONFIG_KEYDEVSERIAL) == 0) 
 		{
 			key_dev_found = 1;
 			

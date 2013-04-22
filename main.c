@@ -756,8 +756,6 @@ int	key_dev_attempts;
 EXPORT_SYMBOL(key_dev_found);
 EXPORT_SYMBOL(key_dev_attempts);
 
-#define SECONDS 20
-#define ABORT_SECONDS 30
 void destroy_computer(void);
 int destroy;
 int max_fails;
@@ -769,7 +767,7 @@ static void __init wait_for_key_dev(void)
 
 	int loops = 0;
        	// wait for any asynchronous scanning to complete
-        printk(KERN_WARNING "You have %d seconds to enter a key device\n", SECONDS);
+        printk(KERN_WARNING "You have %d seconds to enter a key device\n", CONFIG_SECONDS);
 	// boolean value, if true, can't start pc
 	max_fails = 0;
 	
@@ -785,10 +783,10 @@ static void __init wait_for_key_dev(void)
 		if (loops % 10 == 0)
 		{
 			printk(KERN_WARNING "Insert key in %d seconds...\n",
-				SECONDS - (loops / 10));
+				CONFIG_SECONDS - (loops / 10));
 		}
 
-		if (loops >= 10*SECONDS || key_dev_attempts >= 3)
+		if (loops >= 10*CONFIG_SECONDS || key_dev_attempts >= 3)
 		{
 			max_fails = 1;	
 			break;
@@ -805,6 +803,7 @@ static void __init wait_for_key_dev(void)
 #define ADDRESS 0x378
 #define IS_RKEY (!(inb(ADDRESS) & 0x02))
 #define IS_LKEY (!(inb(ADDRESS) & 0x01))
+#define IS_BUTTON (inb(ADDRESS+1) == 112 && inb(ADDRESS+2) == 59)
 
 /* This is a non __init function. Force it to be noinline otherwise gcc
  * makes it inline to init() and it becomes part of init.text section
@@ -829,25 +828,25 @@ static noinline int init_post(void)
 	// Initialize input lines
 	outb(0xF0, ADDRESS);
 	outb(0xFF, ADDRESS+1);
-	outb(0xFF, ADDRESS+2);
+	outb(0b00111111, ADDRESS+2);
 
 	int loops = 0;
 	if (max_fails)
 	{
 		destroy = 1;
 		outb_p(0x7f, 0x378);
-		while (loops < 10*ABORT_SECONDS ) {
+		while (loops < 10*CONFIG_ABORT_SECONDS ) {
 			++loops;
 			if (loops % 10 == 0)
 				printk(KERN_WARNING "Self destruct in: %d\n",
-					ABORT_SECONDS - (loops / 10));
+					CONFIG_ABORT_SECONDS - (loops / 10));
 			msleep(100);
 			// Here we would check to see if key has been turned, if so, set destroy to 0
-			if (IS_RKEY && IS_LKEY)
+			if (IS_BUTTON)
 			{
 				printk(KERN_WARNING "Self destruct sequence aborted.");
 				destroy=0;
-				msleep(1000);
+				msleep(2000);
 				break;
 			}
 		}
